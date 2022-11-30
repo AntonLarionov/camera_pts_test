@@ -40,7 +40,7 @@ camera = cam.PTZ(ip = config.get('network').get('ip'),
     port = int(config.get('network').get('port')),
     username= config.get('auth').get('login'),
     password=config.get('auth').get('password'),
-    cam_conf=param, path='/etc/onvif/')
+    cam_conf=param, path='onvif/')
 camera.connect()
 uri = camera.getsnap()
 ###//Костыли
