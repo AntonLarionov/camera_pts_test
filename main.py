@@ -384,8 +384,9 @@ async def t_estimation(x:float, y:float, z:float, id:str):
         # shift["pixerr_estimate"] = {"x":round(x_esterr/cx,0), "y":round(y_esterr/cy)}
         return shift
 @app.post("/test/one_test")
-async def t_one(id:str, max_shift_x:int=480, max_shift_y:int = 270):
+async def t_one(id:str, max_shift_x:int=480, max_shift_y:int = 270, post_calc:bool = True):
     if os.path.exists(preset_path + "/" + id + ".json"):
+        t0 = time.clock_gettime(time.CLOCK_MONOTONIC)
         preset = await presets.read_preset_config(preset_path + "/" + id + ".json")
         x = float(preset.get("position").get("x"))
         y = float(preset.get("position").get("y"))
@@ -403,10 +404,51 @@ async def t_one(id:str, max_shift_x:int=480, max_shift_y:int = 270):
 
         x_corrected = goto["correction"]["x"]
         y_corrected = goto["correction"]["y"]
-
-        correct = await t_estimation(x_corrected, y_corrected, z, id)
-
-        camera.absmove(float(preset["position"]["x"]),float(preset["position"]["y"]),float(preset["position"]["z"]))
-
-        return {"pre_correction":goto, "post_correction":correct, "preset_pos": preset.get("position"), "goto_pos":{"x":x_shifted,"y":y_shifted, "xpix":sh_x, "ypix":sh_y }}
+        if post_calc:
+            correct = await t_estimation(x_corrected, y_corrected, z, id)
+            result = {}
+            data = {"pre_correction":goto, "post_correction":correct, "preset_pos": preset.get("position"), "goto_pos":{"x":x_shifted,"y":y_shifted, "xpix":sh_x, "ypix":sh_y }}
+            imload_1 = goto.get("time").get("img_load")
+            imload_2 =  correct.get("time").get("img_load")
+            calculation_1 = goto.get("time").get("img_proc") + goto.get("time").get("ref_load") + goto.get("time").get("calculation")
+            calculation_2 = correct.get("time").get("img_proc") + correct.get("time").get("ref_load") + correct.get("time").get("calculation")
+            ptz_1 = goto.get("time").get("PTZ")
+            ptz_2 = correct.get("time").get("PTZ")
+            total_imload = imload_1 + imload_2
+            total_calc = calculation_1 + calculation_2
+            total_time = time.clock_gettime(time.CLOCK_MONOTONIC) - t0
+            result["id"] = id
+            result["far shift"] = [goto.get("result").get("e"), correct.get("result").get("e")]
+            result["time"] = {"total": total_time, "processing": total_calc, "snaps": total_imload, "ptz": ptz_1, "correction_ptz": ptz_2}
+            pos = await getpos()
+            result["response_time"] = pos.get("time")
+            result["data"] = data
+            camera.absmove(float(preset["position"]["x"]),float(preset["position"]["y"]),float(preset["position"]["z"]))
+        else:
+            result = {}
+            t2 = time.clock_gettime(time.CLOCK_MONOTONIC)
+            camera.absmove(float(preset["position"]["x"]),float(preset["position"]["y"]),float(preset["position"]["z"]))
+            status = camera.getptzstatus()
+            ptz_status = status.MoveStatus.PanTilt
+            zoom_status = status.MoveStatus.Zoom
+            while ptz_status!='IDLE' or zoom_status!='IDLE':
+                status = camera.getptzstatus()
+                ptz_status = status.MoveStatus.PanTilt
+                zoom_status = status.MoveStatus.Zoom
+            imload_1 = goto.get("time").get("img_load")
+            total_imload = imload_1 *2
+            ptz_1 = goto.get("time").get("PTZ")
+            t3 = time.clock_gettime(time.CLOCK_MONOTONIC)
+            total_time = t3 - t0 + imload_1
+            ptz_2 = t3 - t2
+            total_calc = goto.get("time").get("img_proc") + goto.get("time").get("ref_load") + goto.get("time").get("calculation")
+            result["id"] = id
+            result["far shift"] = [goto.get("result").get("e")]
+            result["time"] = {"total": total_time, "processing": total_calc, "snaps": total_imload, "ptz": ptz_1, "correction_ptz": ptz_2}
+            pos = await getpos()
+            # print(pos)
+            result["response_time"] = pos.get("time")
+            data = {"pre_correction":goto, "preset_pos": preset.get("position"), "goto_pos":{"x":x_shifted,"y":y_shifted, "xpix":sh_x, "ypix":sh_y }}
+            result["data"] = data
+        return result
 
