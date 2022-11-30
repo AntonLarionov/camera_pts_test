@@ -24,7 +24,13 @@ class CamParam:
     def f2deg (self, focal: float):
         degW =np.degrees(2*np.arctan(self.martix.sizeW/(2*focal)))
         degH =np.degrees(2*np.arctan(self.martix.sizeH/(2*focal)))
+        # print(degW, degH)
         return degW, degH
+
+    # def pix2c (self, focal: float):
+    #     degW =(np.degrees(2*np.arctan(self.martix.sizeW/(2*focal))))/self.martix.sizeW
+    #     degH =(np.degrees(2*np.arctan(self.martix.sizeH/(2*focal))))/self.martix.sizeH
+    #     return degW, degH
     
     def zoom2f (self, norm_zoom:float):
         if self.zoom.absolutezoom == 0:
@@ -68,6 +74,10 @@ class CamParam:
         else:
             norm_tilt = -2 * (deg_tilt - self.tilt.center) / self.tilt.scope
         return norm_tilt
+    # def pix_to_angle(self, x_shift:float, y_shift:float):
+    #     scale_x, scale_y = self.get_aov(self.f)
+    #     print(self.anglew, self.angleh)
+    #     pass
     
     def get_aov(self, focal):
         self.anglew=2*np.arctan(self.martix.sizeW/(2*focal))

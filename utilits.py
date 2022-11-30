@@ -46,6 +46,30 @@ async def get_snap(uri,user,password, auth_type = 'basic', timeout = 1):
         #Преобразую входную строку в изображение
         return imread(response.raw.read(), plugin='imageio')
 
+async def api_get(uri,timeout = 100):
+    try:
+        response = requests.push(uri,timeout=timeout)
+        if response.status_code == 200:
+            return response
+        else:
+            logging.warning("Error " + response.status_code + ": " + uri)
+    except requests.ReadTimeout or requests.ConnectTimeout:
+        logging.warning("Connection timeout: " + uri)
+    except:
+        logging.warning("Connection error to: " + uri)
+
+async def api_push(uri,timeout = 100):
+    try:
+        response = requests.get(uri,timeout=timeout)
+        if response.status_code == 200:
+            return response
+        else:
+            logging.warning("Error " + response.status_code + ": " + uri)
+    except requests.ReadTimeout or requests.ConnectTimeout:
+        logging.warning("Connection timeout: " + uri)
+    except:
+        logging.warning("Connection error to: " + uri)
+
 
 
     

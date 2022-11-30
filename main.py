@@ -13,6 +13,7 @@ import logging
 logger = logging.getLogger("uvicorn.error")
 logger.propagate = False
 import time
+import random
 
 #Загружаю конфигурационный файл камеры
 config = utilits.read_camera_config()
@@ -72,6 +73,14 @@ async def check_content_type(content_type):
 
     file_ext = content_type.split('/')[-1]
     return file_ext
+
+
+#Запрос текущих координат
+@app.get("/api/getpos")
+async def getpos():
+    t0 = time.clock_gettime(time.CLOCK_MONOTONIC)
+    x,y,z =camera.getpos()
+    return {"rel":{"x":x, "y":y, "z":z}, "abs": {"x":param.pan2deg(x), "y":param.tilt2deg(y), "z":param.zoom2f(z)}, "time":time.clock_gettime(time.CLOCK_MONOTONIC) - t0}
 
 
 #Работа с пресетами
@@ -235,8 +244,21 @@ async def goto_ptz (x:float, y:float, z:float):
         zoom_status = status.MoveStatus.Zoom
     t1 = time.clock_gettime(time.CLOCK_MONOTONIC)
     return t1-t0
+@app.post("/api/ptz/gotoabs",status_code = 200)
+async def goto_ptz_abs (x:float, y:float, z:float):
+    t0 = time.clock_gettime(time.CLOCK_MONOTONIC)
+    camera.absmove(param.deg2pan(x),param.deg2tilt(y),param.f2zoom(z))
+    status = camera.getptzstatus()
+    ptz_status = status.MoveStatus.PanTilt
+    zoom_status = status.MoveStatus.Zoom
+    while ptz_status!='IDLE' or zoom_status!='IDLE':
+        status = camera.getptzstatus()
+        ptz_status = status.MoveStatus.PanTilt
+        zoom_status = status.MoveStatus.Zoom
+    t1 = time.clock_gettime(time.CLOCK_MONOTONIC)
+    return t1-t0
 @app.post("/api/ptz/goto_preset",status_code = 200)
-async def goto_ptz (id:str,response: Response):
+async def goto_preset (id:str,response: Response):
     t0 = time.clock_gettime(time.CLOCK_MONOTONIC)
     if os.path.exists(preset_path + "/" + id + ".json"):
         preset = await presets.read_preset_config(preset_path + "/" + id + ".json")
@@ -257,12 +279,15 @@ async def goto_ptz (id:str,response: Response):
         response.status_code=status.HTTP_400_BAD_REQUEST #Надо бы потом добавить конкретику по ошибкам
         return "Id not exist"
 
-@app.get("/api/shift/calculate",status_code = 200)
-async def pixel_shift(id:str,response: Response):
+# @app.get("/api/shift/calculate",status_code = 200)
+@app.get("/api/shift/calculate")
+# async def pixel_shift(id:str,response: Response):
+async def pixel_shift(id:str):
     if os.path.exists(preset_path + "/" + id + ".json"):
         t0 = time.clock_gettime(time.CLOCK_MONOTONIC)
         snap = await utilits.get_snap(uri,str(config.get('auth').get('login')),str(config.get('auth').get('password')),
             str(config.get('auth').get('type')),float(config.get('configuration').get('timeout').get('response')))
+        px,py,pz =camera.getpos()
         if snap is not None:
             preset = await presets.read_preset_config(preset_path + "/" + id + ".json")
             crop_factor = float(preset.get('crop'))
@@ -281,7 +306,7 @@ async def pixel_shift(id:str,response: Response):
             y1 = (cor1.shape[0] / 2 - dy1) * crop_factor
             x2 = (cor2.shape[1] / 2 - dx2) * crop_factor
             y2 = (cor2.shape[0] / 2 - dy2) * crop_factor
-            max_err = np.sqrt(np.square(cor1.shape[0]* crop_factor)+np.square(cor1.shape[1]* crop_factor))
+            # max_err = np.sqrt(np.square(cor1.shape[0]* crop_factor)+np.square(cor1.shape[1]* crop_factor))
             x_err = abs(x1-x2)
             y_err = abs(y1-y2)
             err = np.sqrt(np.square(x_err)+np.square(y_err))
@@ -291,20 +316,97 @@ async def pixel_shift(id:str,response: Response):
             #Не более трети кадра
             if abs(x1) > cor1.shape[1]*0.4*crop_factor:
                 error = True
-                print("x")
+                # print("x")
             if abs(y1) > cor1.shape[0]*0.4*crop_factor:
                 error = True
-                print("y")
-            if err>20:
+                # print("y")
+            if err>30:
                 error = True
-                print("e")
+                # print("e")\
+            
+            if error:
+                x_correc = float(preset.get("position").get("x"))
+                y_correc = float(preset.get("position").get("y"))
+                z_correc = float(preset.get("position").get("z"))
+            else:
+                cx, cy = param.f2deg(param.zoom2f(pz))
+                cx = cx/float(config.get("configuration").get("matrix").get("width"))
+                cy = cy/float(config.get("configuration").get("matrix").get("heigth"))
+                x_correc = param.deg2pan(param.pan2deg(px) + x1*cx)
+                y_correc = param.deg2tilt(param.tilt2deg(py) + y1*cy)
+                z_correc = pz
+                #Работает некорректно!
+                # print(param.pan2deg(x_correc),param.tilt2deg(y_correc))
+                
 
-            return {"result":{"x":x1, "y":y1, "e":error, "kerr":err},"timings":{"img_load":t1-t0, "img_proc":t2-t1, "ref_load":t3-t2, "calculation":t4-t3}}
+            return {"result":{"x":x1, "y":y1, "e":error, "kerr":err},"correction":{"x":x_correc, "y":y_correc,"z":z_correc},"time":{"img_load":t1-t0, "img_proc":t2-t1, "ref_load":t3-t2, "calculation":t4-t3}}
 
-        else:
-            response.status_code=status.HTTP_400_BAD_REQUEST #Надо бы потом добавить конкретику по ошибкам
-            return "Image download error"
-    else:
-        response.status_code=status.HTTP_400_BAD_REQUEST #Надо бы потом добавить конкретику по ошибкам
-        return "Id not exist"
-    
+    #     else:
+    #         response.status_code=status.HTTP_400_BAD_REQUEST #Надо бы потом добавить конкретику по ошибкам
+    #         return "Image download error"
+    # else:
+    #     response.status_code=status.HTTP_400_BAD_REQUEST #Надо бы потом добавить конкретику по ошибкам
+    #     return "Id not exist"
+
+@app.post("/test/estimation")
+async def t_estimation(x:float, y:float, z:float, id:str):
+    if os.path.exists(preset_path + "/" + id + ".json"):
+        preset = await presets.read_preset_config(preset_path + "/" + id + ".json")
+        #Перемещаем в позицию x,y,z
+        t0 = time.clock_gettime(time.CLOCK_MONOTONIC)
+        camera.absmove(x,y,z)
+        status = camera.getptzstatus()
+        ptz_status = status.MoveStatus.PanTilt
+        zoom_status = status.MoveStatus.Zoom
+        while ptz_status!='IDLE' or zoom_status!='IDLE':
+            status = camera.getptzstatus()
+            ptz_status = status.MoveStatus.PanTilt
+            zoom_status = status.MoveStatus.Zoom
+        resopition_time = time.clock_gettime(time.CLOCK_MONOTONIC) - t0
+        #Получаем снап после репозиционирования
+        # stat = Response
+        shift = await pixel_shift(id)
+        shift["time"]["PTZ"] = resopition_time
+        # x_esterr = abs(shift.get("correction").get("x") - float(preset.get("position").get("x")))
+        # y_esterr = abs(shift.get("correction").get("y") - float(preset.get("position").get("y")))
+        # print(param.tilt2deg(y_esterr))
+        # cx, cy = param.f2deg(param.zoom2f(float(preset.get("position").get("z"))))
+        # cx = cx/float(config.get("configuration").get("matrix").get("width"))
+        # cy = cy/float(config.get("configuration").get("matrix").get("heigth"))
+        # x_esterr = x_esterr * param.pan.scope/2
+        # y_esterr = y_esterr * param.tilt.scope/2
+
+        # print(param.tilt2deg(cy))
+
+                # x_correc = param.deg2pan(param.pan2deg(px) + x1*cx)
+                # y_correc = param.deg2tilt(param.tilt2deg(py) + y1*cy)
+                # z_correc = pz
+        # shift["pixerr_estimate"] = {"x":round(x_esterr/cx,0), "y":round(y_esterr/cy)}
+        return shift
+@app.post("/test/one_test")
+async def t_one(id:str, max_shift_x:int=480, max_shift_y:int = 270):
+    if os.path.exists(preset_path + "/" + id + ".json"):
+        preset = await presets.read_preset_config(preset_path + "/" + id + ".json")
+        x = float(preset.get("position").get("x"))
+        y = float(preset.get("position").get("y"))
+        z = float(preset.get("position").get("z"))
+
+        cx, cy = param.f2deg(param.zoom2f(z))
+        cx = cx/float(config.get("configuration").get("matrix").get("width"))
+        cy = cy/float(config.get("configuration").get("matrix").get("heigth"))
+
+        sh_x = random.uniform(-1* max_shift_x,max_shift_x)
+        sh_y = random.uniform(-1* max_shift_y,max_shift_y)
+        x_shifted = param.deg2pan(param.pan2deg(x) + sh_x*cx)
+        y_shifted = param.deg2tilt(param.tilt2deg(y) + sh_y*cy)
+        goto = await t_estimation(x_shifted, y_shifted, z, id)
+
+        x_corrected = goto["correction"]["x"]
+        y_corrected = goto["correction"]["y"]
+
+        correct = await t_estimation(x_corrected, y_corrected, z, id)
+
+        camera.absmove(float(preset["position"]["x"]),float(preset["position"]["y"]),float(preset["position"]["z"]))
+
+        return {"pre_correction":goto, "post_correction":correct, "preset_pos": preset.get("position"), "goto_pos":{"x":x_shifted,"y":y_shifted, "xpix":sh_x, "ypix":sh_y }}
+
