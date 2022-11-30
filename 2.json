@@ -1,0 +1,11 @@
+{
+    "id": "2",
+    "position": {
+        "x": "0.102",
+        "y": "-0.16",
+        "z": "0.02"
+    },
+    "ref": "References/2.jpg",
+    "image": "References/2.npy",
+    "crop": "4"
+}

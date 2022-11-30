@@ -1,0 +1,39 @@
+{
+    "name": "noname",
+    "model": "noname",
+    "presets folder path": "/dev/null",
+    "network": {
+        "ip": "0.0.0.0",
+        "http port": "80",
+        "rtsp port": "554"
+    },
+    "auth": {
+        "login": "",
+        "password": "",
+        "type": "digest"
+    },
+    "configuration": {
+        "loop time": "6",
+        "focal": {
+            "scale": "relative",
+            "min": "0",
+            "max": "0"
+        },
+        "position": {
+            "type": "absolute",
+            "scale": "standart",
+            "speed": "1"
+        },
+        "timeout": {
+            "response": "1",
+            "image": "1",
+            "position": "1"
+        },
+        "matrix": {
+            "size": "1/2",
+            "aspect": "16/9",
+            "width": "1920",
+            "heigth": "1080"
+        }
+    }
+}

@@ -1,0 +1,14 @@
+{
+	"preset id": "0",
+	"crop factor": "4",
+	"reference snap path": "/dev/null",
+	"reference image path": {
+		"main": "/dev/null",
+		"alter": "/dev/null"
+	},
+	"position": {
+		"x": 0,
+		"y": 0,
+		"z": 0
+	}
+}

@@ -1,0 +1,43 @@
+{
+    "name": "noname",
+    "model": "noname",
+    "presets folder path":"/dev/null",
+    "network":{
+        "ip": "10.105.242.171",
+        "port": "80"
+    },
+    "auth": {
+        "login": "admin",
+        "password": "8ftu3QMtuW!F",
+        "type": "digest"
+    },
+    "configuration":{
+        "loop time": "6",
+        "focal":{
+            "scale": "absolute",
+            "min": "2.8",
+            "max": "16"
+        },
+        "position":{
+            "type": "absolute",
+            "scale": "standart",
+            "speed": "1",
+            "tilt_min": "-180",
+            "tilt_max": "180",
+            "pan_min": "0",
+            "pan_max": "90"
+
+        },
+        "timeout":{
+            "response": "5",
+            "position" : "5"
+        },
+        "matrix":
+        {
+            "size": "0.5",
+            "width": "1920",
+            "heigth": "1080"
+
+        }
+    }
+}
